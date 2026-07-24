@@ -1,74 +1,60 @@
-# VarsityLine
+# Diffboard
 
-Verified cut-off marks, courses, and admission dates for Nigerian universities — everything your admission depends on, in one place.
-
-**Live site:** [varsityline.vercel.app](https://varsityline.vercel.app)
+A clean dashboard for browsing and querying public datasets from [Quorel](https://quorel.vercel.app).
 
 ## What it does
 
-VarsityLine aggregates admission-critical information for Nigerian universities and cross-checks it against each university's own admissions office, showing exactly when each entry was last confirmed.
+Diffboard pulls live data from Quorel's public dataset API and presents it as searchable, filterable card views instead of raw JSON. Currently wired up to:
 
-- **University profiles** — key dates (Post-UTME screening, admission list release, O'Level upload deadline, JAMB cut-off), requirements (UTME subjects, O'Level, Direct Entry), fees, and a full course-by-course cut-off table
-- **Search** — by university (name, state, type), by course (name, cut-off comparator), or combined (course + state/type filters)
-- **PDF export** — download search results as a PDF
-- **Subscriptions** — email/Telegram alerts for admission updates on chosen universities, paid via Paystack
-- **Source transparency** — every course row links back to its source, and each university page shows a "last confirmed" timestamp
+- **job-board-listings** — job postings aggregated from public job boards, with search, source filtering, and a dev-roles-only toggle
+- **dev-electronics-listings** — Amazon listings for developer hardware (GPUs, RAM, mini PCs, monitors), with search, category and brand filtering
 
-## Tech stack
+## Stack
 
-- **Framework:** Next.js 16 (App Router, Turbopack)
-- **Language:** TypeScript
-- **Database:** Supabase (Postgres)
-- **Styling:** Tailwind CSS
-- **Icons:** lucide-react
-- **Admin tooling:** MCP server (`mcp-handler`) exposing CRUD tools for universities, courses, and subscriptions, gated behind a secret key
-- **Payments:** Paystack
-- **Deployment:** Vercel
+- Next.js (App Router)
+- TypeScript / TSX
+- Vercel Analytics
+
+## How it's wired
+
+Each dataset has:
+
+1. A server-side proxy route under `app/api/<dataset>/route.ts` that fetches from Quorel and returns JSON. This exists so the browser talks to our own server instead of `quorel.vercel.app` directly, avoiding CORS issues.
+2. A page under `app/<dataset>/page.tsx` that fetches from the local proxy route, then filters/sorts/dedupes client-side and renders results as cards.
+
+The landing page (`app/page.tsx`) lists both datasets and links out to Quorel for anyone who wants to grab their own.
 
 ## Project structure
 
 ```
 app/
-  [slug]/page.tsx        # University detail page
-  api/mcp/[key]/route.ts # MCP admin server (key-gated)
-components/
-  SearchPanel.tsx         # Multi-mode search UI
-  StatusBadge.tsx
-  SearchAccessGate.tsx
-lib/
-  supabase.ts
-  generatePdf.ts
-types/
-  university.ts
+  layout.tsx                          # root layout, fonts, Vercel Analytics
+  page.tsx                            # landing page
+  job-board-listings/
+    page.tsx
+  dev-electronics-listings/
+    page.tsx
+  api/
+    job-board-listings/route.ts       # proxy → quorel job-board-listings
+    dev-electronics-listings/route.ts # proxy → quorel dev-electronics-listings
 ```
 
-## Data model
-
-- **universities** — `slug`, `name`, `state`, `type` (Federal/State/Private), `jamb_cutoff`, `admission_status`, key dates, fees, `last_verified_at`
-- **courses** — belongs to a university; `name`, `faculty`, `cutoff_mark`, `subject_combo`, `de_eligible`, `de_cutoff_mark`, `source_url`
-- **links** — official site, WhatsApp, Facebook links per university
-- **subscriptions** — email/Telegram alert subscriptions tied to Paystack payments, with per-university scoping and expiry
-
-## Getting started
+## Running locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-### Environment variables
+Visit `http://localhost:3000`.
 
-```
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-MCP_SECRET_KEY=
-```
+## Adding a new dataset
 
-## Admin data management
+1. Add a proxy route at `app/api/<slug>/route.ts` pointing at the Quorel endpoint.
+2. Add a page at `app/<slug>/page.tsx` that fetches from `/api/<slug>` and renders cards.
+3. Add an entry to the `DATASETS` array in `app/page.tsx`.
 
-Admin operations (creating/updating universities, courses, and subscriptions, marking records as verified) are handled through an MCP server at `/api/mcp/[key]`, authenticated by `MCP_SECRET_KEY`. Connect an MCP-compatible client (e.g. Claude) pointed at that endpoint to manage data conversationally instead of building a separate admin panel.
+## Notes
 
-## Disclaimer
-
-Meeting a course's cut-off mark does not guarantee admission — Post-UTME score and O'Level grades are also weighted. VarsityLine surfaces official figures but decisions rest with each university's admissions office.
-# diffboard
+- Dark mode is a manual toggle (persisted in `localStorage`), defaulting to system preference on first load.
+- Quorel's raw data is inconsistent in places (nulls, duplicate rows, mixed types for fields like price). Each page does its own light cleanup: dedup by a composite key, price parsing for strings like `"$739.99"`, and filtering out entries missing required fields.
